@@ -131,11 +131,22 @@
                   <div class="title-section">
                     <div class="title-row">
                       <h3 class="routine-card-title">{{ routine.title }}</h3>
-                      <div class="dropdown">
-                        <button class="btn-menu" type="button" data-bs-toggle="dropdown">⋯</button>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                          <li><a class="dropdown-item" href="#" @click.prevent="editRoutine(routine)">Edit Routine</a></li>
-                          <li><a class="dropdown-item text-danger" href="#" @click.prevent="deleteRoutine(routine.routineId)">Delete</a></li>
+                      <div class="dropdown" :class="{ show: openDropdownId === routine.routineId }">
+                        <button 
+                          class="btn-menu" 
+                          type="button" 
+                          :id="`dropdown-btn-${routine.routineId}`"
+                          @click.stop="toggleDropdown(routine.routineId)"
+                          :aria-expanded="openDropdownId === routine.routineId"
+                          aria-haspopup="true"
+                        >⋯</button>
+                        <ul 
+                          class="dropdown-menu dropdown-menu-end" 
+                          :class="{ show: openDropdownId === routine.routineId }"
+                          :aria-labelledby="`dropdown-btn-${routine.routineId}`"
+                        >
+                          <li><a class="dropdown-item" href="#" @click.prevent="closeDropdown(); editRoutine(routine)">Edit Routine</a></li>
+                          <li><a class="dropdown-item text-danger" href="#" @click.prevent="closeDropdown(); deleteRoutine(routine.routineId)">Delete</a></li>
                         </ul>
                       </div>
                     </div>
@@ -173,11 +184,22 @@
                   <div class="title-section-mobile">
                     <div class="title-row-mobile">
                       <h3 class="routine-card-title-mobile">{{ routine.title }}</h3>
-                      <div class="dropdown">
-                        <button class="btn-menu-mobile" type="button" data-bs-toggle="dropdown">⋯</button>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                          <li><a class="dropdown-item" href="#" @click.prevent="editRoutine(routine)">Edit</a></li>
-                          <li><a class="dropdown-item text-danger" href="#" @click.prevent="deleteRoutine(routine.routineId)">Delete</a></li>
+                      <div class="dropdown" :class="{ show: openDropdownId === routine.routineId }">
+                        <button 
+                          class="btn-menu-mobile" 
+                          type="button" 
+                          :id="`dropdown-btn-mobile-${routine.routineId}`"
+                          @click.stop="toggleDropdown(routine.routineId)"
+                          :aria-expanded="openDropdownId === routine.routineId"
+                          aria-haspopup="true"
+                        >⋯</button>
+                        <ul 
+                          class="dropdown-menu dropdown-menu-end" 
+                          :class="{ show: openDropdownId === routine.routineId }"
+                          :aria-labelledby="`dropdown-btn-mobile-${routine.routineId}`"
+                        >
+                          <li><a class="dropdown-item" href="#" @click.prevent="closeDropdown(); editRoutine(routine)">Edit</a></li>
+                          <li><a class="dropdown-item text-danger" href="#" @click.prevent="closeDropdown(); deleteRoutine(routine.routineId)">Delete</a></li>
                         </ul>
                       </div>
                     </div>
@@ -274,7 +296,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { WorkoutService } from '../services/workoutService.js'
 import ExerciseForm from '../components/ExerciseForm.vue'
@@ -289,6 +311,7 @@ const routines = ref([])
 const exercises = ref([])
 const showExerciseSelector = ref(false)
 const editingRoutine = ref(null)
+const openDropdownId = ref(null)
 
 // Toast notification
 const notification = ref({
@@ -312,13 +335,35 @@ const routineForm = ref({
   exercises: []
 })
 
+const toggleDropdown = (routineId) => {
+  if (openDropdownId.value === routineId) {
+    openDropdownId.value = null
+  } else {
+    openDropdownId.value = routineId
+  }
+}
+
+const closeDropdown = () => {
+  openDropdownId.value = null
+}
+
+const handleClickOutside = (e) => {
+  if (!e.target.closest('.dropdown')) {
+    closeDropdown()
+  }
+}
+
 onMounted(async () => {
   await loadRoutines()
   await loadExercises()
   loadDraftRoutine()
+  document.addEventListener('click', handleClickOutside)
 })
 
-// Watch for changes in routine form and save draft state
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
+
 watch(routineForm, () => {
   saveDraftRoutine()
 }, { deep: true })
@@ -406,6 +451,7 @@ const loadRoutines = async () => {
   loading.value = true
   try {
     routines.value = await WorkoutService.getUserRoutines()
+    closeDropdown()
   } catch (error) {
     console.error('Error loading routines:', error)
     showNotification(getErrorMessage(error, 'Failed to load routines. Please try again.'), 'error')
@@ -475,6 +521,7 @@ const saveRoutine = async () => {
 }
 
 const editRoutine = (routine) => {
+  closeDropdown()
   editingRoutine.value = routine
   routineForm.value = {
     title: routine.title,
@@ -974,17 +1021,23 @@ const resetForm = () => {
   background: transparent;
   font-size: 20px;
   line-height: 1;
-  opacity: 0;
+  opacity: 0.5;
   transition: all 0.2s ease;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  cursor: pointer;
 }
 
 .routine-card:hover .btn-menu {
   opacity: 1;
+}
+
+.btn-menu:focus {
+  opacity: 1;
+  outline: none;
 }
 
 .btn-menu:hover {
@@ -1099,6 +1152,11 @@ const resetForm = () => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  cursor: pointer;
+}
+
+.btn-menu-mobile:focus {
+  outline: none;
 }
 
 .btn-menu-mobile:hover {
@@ -1142,18 +1200,41 @@ const resetForm = () => {
   background: #000;
 }
 
-/* Dropdown menu styles */
+.dropdown {
+  position: relative;
+}
+
 .dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1000;
+  display: none;
+  min-width: 160px;
+  margin-top: 0.5rem;
   border: 1px solid rgba(0, 0, 0, 0.05);
   border-radius: 16px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   padding: 0.5rem;
+  background: white;
+}
+
+.dropdown.show .dropdown-menu,
+.dropdown-menu.show {
+  display: block;
 }
 
 .dropdown-item {
   border-radius: 12px;
   padding: 0.625rem 1rem;
   font-size: 14px;
+  display: block;
+  width: 100%;
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  border: none;
+  background: none;
 }
 
 .dropdown-item:hover {
@@ -1271,6 +1352,11 @@ const resetForm = () => {
 .dark .dropdown-item.text-danger:hover {
   background: rgba(255, 107, 107, 0.1);
   color: #ff6b6b;
+}
+
+.dark .dropdown-menu {
+  background: #1a1a1a;
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 /* Fade transition for delete modal */
